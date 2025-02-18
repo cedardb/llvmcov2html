@@ -48,6 +48,11 @@ static void escapeHtml(ostream& out, string_view s)
    out << sv;
 }
 //---------------------------------------------------------------------------
+static void highlightFilename(ostream& out, string_view s) {
+   auto pos = s.find_last_of('/') + 1;
+   out << s.substr(0, pos) << "<span class=\"filename\">" << s.substr(pos) << "</span>";
+}
+//---------------------------------------------------------------------------
 struct HitList {
    vector<unsigned> hits, misses;
 };
@@ -561,6 +566,7 @@ static void writeExtras(string targetDir)
           << "td.coverNumMed { text-align: right; padding-left: 10px; padding-right: 10px; background-color: #FFEA20; }" << endl
           << "td.coverPerLo { text-align: right; padding-left: 10px; padding-right: 10px; background-color: #FF0000; font-weight: bold; }" << endl
           << "td.coverNumLo { text-align: right; padding-left: 10px; padding-right: 10px; background-color: #FF0000; }" << endl;
+          << "span.filename { font-weight: bold; }" << endl;
    }
 }
 //---------------------------------------------------------------------------
@@ -728,7 +734,7 @@ int main(int argc, char** argv) {
          out << R"(<tr>
                      <td class="coverFile"><a href=")"
              << i.htmlFile << "\">";
-         escapeHtml(out, i.prettyName);
+         highlightFilename(out, i.prettyName);
          out << R"(</a></td>
                      <td class="coverBar" align="center">
                        <table border="0" cellspacing="0" cellpadding="1"><tr><td class="coverBarOutline">)";
