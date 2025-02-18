@@ -129,6 +129,10 @@ void SourceWriter::finishLine(unsigned lineNo)
       (hitCandidates ? c.hits : c.misses).push_back(lineNo);
    }
 
+   // Write the line number
+   out << R"(<span class="lineNum">)";
+   out << std::format("{:>{}}", lineNo, 5);
+   out << "</span>";
    // Write the line intro
    if (!candidates) {
       out << R"(            )";
@@ -395,7 +399,7 @@ static inline unsigned computePerc(unsigned hitLines, unsigned executableLines)
 static void writeHeader(ostream& out, const string& binaryName, const string& timestamp, const string& prettyFile, unsigned hitLines, unsigned executableLines, bool hasSearch)
 // Write the HTML header
 {
-   out << R"(<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN>
+   out << R"(<!DOCTYPE html>
              <html>
              <head>
                 <title>Coverage - )";
@@ -440,7 +444,7 @@ static void writeHeader(ostream& out, const string& binaryName, const string& ti
                      <td class="headerValue" width="10%">)"
        << hitLines << R"(</td>
                    </tr>)"
-       << (hasSearch ? R"(<tr><td class="headerItem" width="20%">Search:</td><td width="80%"><input type="text" id="search" value="" /></td></tr>)" : "") <<
+       << (hasSearch ? R"(<tr><td class="headerItem" width="20%">Search:</td><td width="80%" colspan="4"><input type="text" id="search" value="" /></td></tr>)" : "") <<
       R"(</table>
                </td>
              </tr>
@@ -459,13 +463,15 @@ static void writeFooter(ostream& out, bool hasSearch)
            <br/>)"
        << (hasSearch ? R"(
 <script>
+   // Build lookup table with all files by parsing html table
    const mainTable = document.getElementById("main");
-   let = files = {}
+   let files = {}
    for (let el of mainTable.getElementsByClassName("coverFile")) {
        const name = el.innerText.substr(6).toLowerCase();
        files[name] = el.parentNode;
    }
 
+   // Add search oninput to field
    const search = (needle) => {
        for (let key in files) {
            const found = needle.split(" ").map(el => key.includes(el)).every(t => t);
@@ -476,9 +482,21 @@ static void writeFooter(ostream& out, bool hasSearch)
    document.getElementById("search").addEventListener("input", (e) => {
        search(e.value || e.target.value);
    });
+
+   // Hitting return opens the first in the list
+   document.getElementById("search").addEventListener("keydown", (e) => {
+      if(e.keyCode == 13) { // Enter
+         mainTable.querySelector('tr:not([style*="display: none"]) a').click();
+      }
+   });
+
+   // Focus on search field on load
+   document.addEventListener('DOMContentLoaded', (e) => {
+      document.getElementById("search").focus();
+   });
 </script>)" :
                        "")
-       << R"("
+       << R"(
            </body>
            </html>)"
        << endl;
@@ -541,32 +559,65 @@ static void writeExtras(string targetDir)
          cerr << "unable to write " << outputFile << endl;
          exit(1);
       }
-      out << "/* Based upon the lcov CSS style, style files can be reused */" << endl
-          << ":root {--lowcov: #cc3232;--medcov: #e7b416;--highcov: #99c140;}" << endl
-          << "body { color: #000000; background-color: #FFFFFF; }" << endl
-          << "a:link { color: #284FA8; text-decoration: underline; }" << endl
-          << "a:visited { color: #00CB40; text-decoration: underline; }" << endl
-          << "a:active { color: #FF0040; text-decoration: underline; }" << endl
-          << "td.title { text-align: center; padding-bottom: 10px; font-size: 20pt; font-weight: bold; }" << endl
-          << "td.ruler { background-color: #6688D4; height: 3px; }" << endl
-          << "td.headerItem { text-align: right; padding-right: 6px; font-family: sans-serif; font-weight: bold; }" << endl
-          << "td.headerValue { text-align: left; color: #284FA8; font-family: sans-serif; font-weight: bold; }" << endl
-          << "td.versionInfo { text-align: center; padding-top:  2px; }" << endl
-          << "pre.source { font-family: monospace; white-space: pre; }" << endl
-          << "span.lineNum { background-color: #EFE383; }" << endl
-          << "span.lineCov { background-color: #CAD7FE; }" << endl
-          << "span.linePartCov { background-color: #FFEA20; }" << endl
-          << "span.lineNoCov { background-color: #FF6230; }" << endl
-          << "td.tableHead { text-align: center; color: #FFFFFF; background-color: #6688D4; font-family: sans-serif; font-size: 120%; font-weight: bold; }" << endl
-          << "td.coverFile { text-align: left; padding-left: 10px; padding-right: 20px; color: #284FA8; background-color: #DAE7FE; font-family: monospace; }" << endl
-          << "td.coverBar { padding-left: 10px; padding-right: 10px; background-color: #DAE7FE; }" << endl
-          << "td.coverBarOutline { background-color: #000000; }" << endl
-          << "td.coverPer { font-weight: bold; }" << endl
-          << "td.coverHi { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--highcov); }" << endl
-          << "td.coverMed { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--medcov); }" << endl
-          << "td.coverLo { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--lowcov); color: white; }" << endl
-          << "span.progBar { diplay: inline-block; height: 10px }" << endl
-          << "span.filename { font-weight: bold; }" << endl;
+      out << R"(/* Based upon the lcov CSS style, style files can be reused */
+:root {
+   --lowcov: #cc3232;
+   --medcov: #e7b416;
+   --highcov: #99c140;
+
+   --lowcovtext: #b91f40;
+   --medcovtext: #f08000;
+   --highcovtext: #006400;
+   --lowcovtextbg: color-mix(in srgb, var(--lowcovtext), white 90%);
+   --medcovtextbg: color-mix(in srgb, var(--medcovtext), white 90%);
+   --highcovtextbg: inherit;
+
+   --tablebg: #eee8d5;
+   --linenum: #8080a0;
+   --highlight: #6687D4;
+   --bg: #fff;
+   --code: #000;
+   --fg: #000;
+}
+@media (prefers-color-scheme: dark) {
+   :root {
+      --lowcov: #7a1e1e;--medcov: #8a6b0d;--highcov: #5d7526;
+      --lowcovtext: #cc3232;--medcovtext: #e7b416;--highcovtext: #99c140;
+      --lowcovtextbg: rgba(204, 50, 50, 0.33);
+      --medcovtextbg: rgba(231, 180, 22, 0.33);
+      --highcovtextbg: inherit;
+      --tablebg: #073642;
+      --highlight: #cb4b16;
+      --bg: #002b36;
+      --fg:#FFF;
+      --code: #93a1a1;
+      --linenum: var(--code);
+   }
+}
+body { color: var(--fg); background-color: var(--bg); }
+a:link { color: var(--code); text-decoration: underline; }
+a:visited { color: #859900; }
+a:active { color: #dc322f; }
+td.title { text-align: center; padding-bottom: 10px; font-size: 20pt; font-weight: bold; }
+td.ruler { background-color: var(--highlight); height: 3px; }
+td.headerItem { text-align: right; padding-right: 6px; font-family: sans-serif; font-weight: bold; }
+td.headerValue { text-align: left; color: var(--highlight); font-family: sans-serif; font-weight: bold; }
+td.versionInfo { text-align: center; padding-top:  2px; }
+pre.source { font-family: monospace; white-space: pre; color: var(--code); }
+span.lineNum { color: var(--linenum); background-color: var(--tablebg); }
+span.lineCov { color: var(--highcovtext); background-color: var(--highcovtextbg); }
+span.linePartCov { color: var(--medcovtext); background-color: var(--medcovtextbg); }
+span.lineNoCov { color: var(--lowcovtext); background-color: var(--lowcovtextbg); }
+td.tableHead { text-align: center; color: var(--fg); background-color: var(--highlight); font-family: sans-serif; font-size: 120%; font-weight: bold; }
+td.coverFile { text-align: left; padding-left: 10px; padding-right: 20px; color: var(--fg); background-color: var(--tablebg); font-family: monospace; }
+td.coverBar { padding-left: 10px; padding-right: 10px; background-color: var(--tablebg); }
+td.coverBarOutline { background-color: #000000; }
+td.coverPer { font-weight: bold; }
+td.coverHi { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--highcov); }
+td.coverMed { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--medcov); }
+td.coverLo { text-align: right; padding-left: 10px; padding-right: 10px; background-color: var(--lowcov); color: var(--fg); }
+span.progBar { diplay: inline-block; height: 10px }
+span.filename { font-weight: bold; })";
    }
 }
 //---------------------------------------------------------------------------
@@ -737,7 +788,7 @@ int main(int argc, char** argv) {
          highlightFilename(out, i.prettyName);
          out << R"(</a></td>
                      <td class="coverBar" align="center">
-                       <table border="0" cellspacing="0" cellpadding="1"><tr><td class="coverBarOutline">)";
+                       <table border="0" cellspacing="0" cellpadding="1"><tr><td>)";
          constructBar(out, perc);
          out << R"(</td></tr></table>
                      </td>
