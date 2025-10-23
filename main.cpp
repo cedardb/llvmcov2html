@@ -474,7 +474,7 @@ static void writeFooter(ostream& out, bool hasSearch)
    // Add search oninput to field
    const search = (needle) => {
        for (let key in files) {
-           const found = needle.split(" ").map(el => key.includes(el)).every(t => t);
+           const found = needle.toLowerCase().split(" ").map(el => key.includes(el)).every(t => t);
            files[key].style.display = found ? "table-row" : "none";
        }
    };
